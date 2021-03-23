@@ -10,6 +10,7 @@ from mel_ast import *
 def _make_parser():
     num = ppc.fnumber
     ident = ppc.identifier
+    vartype = pp.oneOf(('int real bool char'))
 
     LPAR, RPAR = pp.Literal('(').suppress(), pp.Literal(')').suppress()
     ASSIGN = pp.Literal('=')
@@ -26,17 +27,32 @@ def _make_parser():
 
     expr = add
 
-    stmt = pp.Forward()
+    stmt_list = pp.Forward()
 
     input = INPUT.suppress() + ident
     output = OUTPUT.suppress() + add
     assign = ident + ASSIGN.suppress() + add
+    declare = vartype + assign
 
-    if_ = pp.Keyword("if").suppress() + LPAR + expr + RPAR + stmt + \
-        pp.Optional(pp.Keyword("else").suppress() + stmt)
+    if_ = pp.Keyword("if").suppress() + expr + pp.Keyword("then").suppress() + stmt_list + \
+          pp.ZeroOrMore(pp.Keyword("elif").suppress() + expr + pp.Keyword("then").suppress() + stmt_list) + \
+            pp.Optional(pp.Keyword("else").suppress() + stmt_list) + pp.Keyword("end if").suppress()
 
-    stmt << ( input | output | assign | if_ )
-    stmt_list = pp.ZeroOrMore(stmt)
+    loop_ = pp.Keyword("loop").suppress() + stmt_list + pp.Keyword("end loop").suppress()
+
+    while_ = pp.Keyword("while").suppress() + expr + loop_
+
+    for_ = pp.Keyword("for").suppress() + expr + \
+             pp.Literal(",").suppress() + expr + \
+             pp.Literal(",").suppress() + expr + loop_
+
+    scope = pp.Keyword("begin").suppress() + stmt_list + pp.Keyword("end").suppress()
+
+    stmt = ( input | output | assign | declare | if_ | loop_ | while_ | for_ | scope)
+
+    #scope = pp.Keyword('begin').suppress(), pp.Literal('end').suppress()
+
+    stmt_list << pp.ZeroOrMore(stmt)
     program = stmt_list.ignore(pp.cStyleComment).ignore(pp.dblSlashComment) + pp.StringEnd()
 
     start = program
